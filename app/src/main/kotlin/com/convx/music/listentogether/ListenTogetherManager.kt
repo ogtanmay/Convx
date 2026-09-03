@@ -734,6 +734,20 @@ class ListenTogetherManager @Inject constructor(
                     Timber.tag(TAG).e(e, "Error adding approved suggestion to queue")
                 }
             }
+
+            is ListenTogetherEvent.SuggestionApproved -> {
+                try {
+                    val mediaMetadata = event.payload.trackInfo.toMediaMetadata()
+                    val mediaItem = mediaMetadata.toMediaItem()
+                    playerConnection?.allowInternalSync = true
+                    playerConnection?.playNext(mediaItem)
+                    playerConnection?.allowInternalSync = false
+                    Timber.tag(TAG).d("Approved suggestion synchronized: ${mediaMetadata.title}")
+                } catch (e: Exception) {
+                    playerConnection?.allowInternalSync = false
+                    Timber.tag(TAG).e(e, "Error applying approved suggestion")
+                }
+            }
             
             is ListenTogetherEvent.ConnectionError -> {
                 Timber.tag(TAG).e("Connection error: ${event.error}")

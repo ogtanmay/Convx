@@ -146,6 +146,8 @@ sealed class ListenTogetherEvent {
 
     // Chat events
     data class ChatMessageReceived(val payload: ChatMessagePayload) : ListenTogetherEvent()
+
+    data class SuggestionApproved(val payload: SuggestionApprovedPayload) : ListenTogetherEvent()
     
     // Internal state actions
     data class LocalSuggestionApproved(val payload: SuggestionReceivedPayload) : ListenTogetherEvent()
@@ -529,8 +531,20 @@ class ListenTogetherClient @Inject constructor(
     fun connect(roomCode: String? = null) {
         if (_connectionState.value == ConnectionState.CONNECTED ||
             _connectionState.value == ConnectionState.CONNECTING) {
-            log(LogLevel.WARNING, "Already connected or connecting")
-            return
+            val requestedCode = roomCode?.trim()?.uppercase()
+            if (requestedCode == null || requestedCode == connectedRoomCode) {
+                log(LogLevel.WARNING, "Already connected or connecting")
+                return
+            }
+            // A WebSocket is routed to one room path and cannot be reused for
+            // another room. Do not call disconnect() here: it clears the
+            // pending create/join action that must run on the replacement
+            // socket.
+            pingJob?.cancel()
+            pingJob = null
+            webSocket?.cancel()
+            webSocket = null
+            _connectionState.value = ConnectionState.DISCONNECTED
         }
 
         // The room has to be in the URL. Cloudflare routes the socket to the
@@ -563,6 +577,13 @@ class ListenTogetherClient @Inject constructor(
 
         webSocket = client.newWebSocket(request, object : WebSocketListener() {
             override fun onOpen(webSocket: WebSocket, response: Response) {
+                if (this@ListenTogetherClient.webSocket !== webSocket) {
+                    // A room switch can cancel a socket while OkHttp is still
+                    // delivering its callbacks. Stale callbacks must not
+                    // execute the new room's pending action.
+                    webSocket.cancel()
+                    return
+                }
                 log(LogLevel.INFO, "Connected to server")
                 _connectionState.value = ConnectionState.CONNECTED
                 reconnectAttempts = 0
@@ -579,26 +600,31 @@ class ListenTogetherClient @Inject constructor(
             }
 
             override fun onMessage(webSocket: WebSocket, text: String) {
+                if (this@ListenTogetherClient.webSocket !== webSocket) return
                 // Handle text messages (JSON - DEPRECATED)
                 handleMessage(text.toByteArray())
             }
             
             override fun onMessage(webSocket: WebSocket, bytes: okio.ByteString) {
+                if (this@ListenTogetherClient.webSocket !== webSocket) return
                 // Handle binary messages (Protobuf)
                 handleMessage(bytes.toByteArray())
             }
 
             override fun onClosing(webSocket: WebSocket, code: Int, reason: String) {
+                if (this@ListenTogetherClient.webSocket !== webSocket) return
                 log(LogLevel.INFO, "Server closing connection", "Code: $code, Reason: $reason")
                 webSocket.close(1000, null)
             }
 
             override fun onClosed(webSocket: WebSocket, code: Int, reason: String) {
+                if (this@ListenTogetherClient.webSocket !== webSocket) return
                 log(LogLevel.INFO, "Connection closed", "Code: $code, Reason: $reason")
                 handleDisconnect()
             }
 
             override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
+                if (this@ListenTogetherClient.webSocket !== webSocket) return
                 log(LogLevel.ERROR, "Connection failure", t.message)
                 handleConnectionFailure(t)
             }
@@ -1104,6 +1130,18 @@ class ListenTogetherClient @Inject constructor(
                 
                 MessageTypes.SYNC_STATE -> {
                     val payload = codec.decodePayload(msgType, payloadBytes, detectedFormat) as? SyncStatePayload ?: return
+                    _roomState.value = _roomState.value?.copy(
+                        currentTrack = payload.currentTrack,
+                        isPlaying = payload.isPlaying,
+                        position = payload.position,
+                        lastUpdate = payload.lastUpdate,
+                        queue = payload.queue ?: _roomState.value?.queue.orEmpty(),
+                        volume = payload.volume ?: _roomState.value?.volume ?: 1f,
+                        controlMode = payload.controlMode ?: _roomState.value?.controlMode ?: ControlModes.OWNER,
+                        expiresAt = payload.expiresAt ?: _roomState.value?.expiresAt ?: 0L
+                    )
+                    payload.controlMode?.let { _controlMode.value = it }
+                    payload.expiresAt?.let { _roomExpiresAt.value = it }
                     log(LogLevel.INFO, "Sync state received", "Playing: ${payload.isPlaying}, Position: ${payload.position}")
                     scope.launch { _events.emit(ListenTogetherEvent.SyncStateReceived(payload)) }
                 }
@@ -1165,10 +1203,9 @@ class ListenTogetherClient @Inject constructor(
                                 "${payload.fromUsername}: ${payload.trackInfo.title}"
                             )
                             // Must go through the pending list even though nothing is
-                            // pending: approveSuggestion looks the payload up there to
-                            // emit LocalSuggestionApproved, and that event is what puts
-                            // the track into the host's own queue. Approving without it
-                            // would notify the server and enqueue nothing locally.
+                            // pending: approveSuggestion uses it to keep the host UI
+                            // and server approval path identical. The server's
+                            // suggestion_approved broadcast updates every local queue.
                             _pendingSuggestions.value += payload
                             approveSuggestion(payload.suggestionId)
                             // Still tell the host who added what — silent queue changes
@@ -1207,20 +1244,17 @@ class ListenTogetherClient @Inject constructor(
                 MessageTypes.SUGGESTION_APPROVED -> {
                     val payload = codec.decodePayload(msgType, payloadBytes, detectedFormat) as? SuggestionApprovedPayload ?: return
                     log(LogLevel.INFO, "Suggestion approved", payload.trackInfo.title)
+                    _roomState.value = _roomState.value?.let { state ->
+                        if (state.queue.any { it.id == payload.trackInfo.id }) state
+                        else state.copy(queue = listOf(payload.trackInfo) + state.queue)
+                    }
                     
                     // Dismiss notification if it exists (for host who approved via another device/modal)
                     suggestionNotifications.remove(payload.suggestionId)?.let { notifId ->
                         NotificationManagerCompat.from(context).cancel(notifId)
                     }
                     
-                    scope.launch {
-                        _events.emit(
-                            ListenTogetherEvent.QueueTrackAdded(
-                                title = payload.trackInfo.title,
-                                addedBy = payload.trackInfo.suggestedBy
-                            )
-                        )
-                    }
+                    scope.launch { _events.emit(ListenTogetherEvent.SuggestionApproved(payload)) }
                 }
 
                 MessageTypes.SUGGESTION_REJECTED -> {
@@ -1357,7 +1391,15 @@ class ListenTogetherClient @Inject constructor(
             val data = codec.encode(type, payload)
             log(LogLevel.DEBUG, "Sending message", "$type (${codec.format.name})")
             
-            val success = webSocket?.send(okio.ByteString.of(*data)) ?: false
+            // JSON must be sent as a text frame. OkHttp accepts binary JSON,
+            // but proxies and older Worker runtimes can route text and binary
+            // frames differently; the wire contract is JSON text until the
+            // server explicitly negotiates protobuf.
+            val success = if (codec.format == MessageFormat.JSON) {
+                webSocket?.send(data.toString(Charsets.UTF_8)) ?: false
+            } else {
+                webSocket?.send(okio.ByteString.of(*data)) ?: false
+            }
             if (!success) {
                 log(LogLevel.ERROR, "Failed to send message", type)
             }
@@ -1448,9 +1490,6 @@ class ListenTogetherClient @Inject constructor(
             sendMessage(MessageTypes.JOIN_ROOM, JoinRoomPayload(code, username))
         } else {
             pendingAction = PendingAction.JoinRoom(code, username)
-            if (_connectionState.value == ConnectionState.CONNECTED) {
-                disconnect()
-            }
             connect(code)
         }
     }
@@ -1648,11 +1687,6 @@ class ListenTogetherClient @Inject constructor(
         val suggestion = _pendingSuggestions.value.find { it.suggestionId == suggestionId }
         
         sendMessage(MessageTypes.APPROVE_SUGGESTION, ApproveSuggestionPayload(suggestionId))
-        
-        // Emit internal event so manager can update local player
-        if (suggestion != null) {
-            scope.launch { _events.emit(ListenTogetherEvent.LocalSuggestionApproved(suggestion)) }
-        }
         
         // Remove locally from pending list
         _pendingSuggestions.value = _pendingSuggestions.value.filter { it.suggestionId != suggestionId }

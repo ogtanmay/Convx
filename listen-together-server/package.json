@@ -8,7 +8,8 @@
     "start:node": "tsx src/node-server.ts",
     "deploy": "wrangler deploy",
     "tail": "wrangler tail",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test:protocol": "node test-protocol.mjs"
   },
   "devDependencies": {
     "@types/node": "^22.10.0",

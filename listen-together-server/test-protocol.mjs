@@ -7,6 +7,8 @@
  * which is the part that cannot be checked with curl.
  */
 
+import { WebSocket } from 'ws';
+
 const base = process.argv[2];
 if (!base) {
   console.error('usage: node test-protocol.mjs <https-base-url>');
@@ -127,7 +129,7 @@ guest.inbox.length = 0;
 send(guest, 'request_sync');
 const state = await waitFor(guest, 'sync_state');
 check(state?.payload?.current_track?.id === 'yt-abc123', 'current_track persisted in room state');
-check(state?.payload?.is_playing === true, 'is_playing persisted in room state');
+check(state?.payload?.is_playing === false, 'track change pauses room state until play');
 
 host.close();
 guest.close();

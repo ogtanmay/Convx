@@ -402,7 +402,7 @@ export class Room {
   private async handleJoin(ws: WebSocket, username: string) {
     if (!username?.trim()) return this.err(ws, 'bad_username', 'username required');
     const max = Number(this.env.MAX_MEMBERS ?? '20');
-    if (Object.keys(this.members).length >= max) {
+    if (Object.keys(this.members).length + Object.keys(this.pending).length >= max) {
       return this.send(ws, S2C.JOIN_REJECTED, { reason: 'Room is full' });
     }
     const user_id = crypto.randomUUID();
@@ -520,17 +520,25 @@ export class Room {
         if (typeof p.position === 'number') r.position = p.position;
         break;
       case 'set_volume':
-        if (typeof p.volume === 'number') r.volume = p.volume;
+        if (typeof p.volume === 'number' && Number.isFinite(p.volume)) {
+          r.volume = Math.min(1, Math.max(0, p.volume));
+        }
         break;
       case 'change_track':
       case 'skip_next':
       case 'skip_prev':
         if (p.track_info) r.current_track = p.track_info;
+        // A new track is prepared before the manager sends PLAY. Keeping the
+        // state paused here makes the protocol deterministic for late joiners
+        // and matches the Android manager's buffer handshake.
+        if (p.track_info) r.is_playing = false;
         r.position = typeof p.position === 'number' ? p.position : 0;
         startedTrackId = r.current_track?.id ?? null;
         break;
       case 'queue_add':
-        if (p.track_info) r.queue = [...r.queue, p.track_info];
+        if (p.track_info) {
+          r.queue = p.insert_next === true ? [p.track_info, ...r.queue] : [...r.queue, p.track_info];
+        }
         break;
       case 'queue_remove':
         if (p.track_id) r.queue = r.queue.filter((t) => t.id !== p.track_id);
@@ -611,7 +619,7 @@ export class Room {
     if (!s) return;
     delete this.suggestions[id];
     if (approved) {
-      this.room!.queue = [...this.room!.queue, s.track_info];
+      this.room!.queue = [s.track_info, ...this.room!.queue];
       await this.persist();
       this.broadcast(S2C.SUGGESTION_APPROVED, { suggestion_id: id, track_info: s.track_info });
     } else {
