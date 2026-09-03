@@ -32,9 +32,9 @@ object UpdateNotificationHelper {
 
         // Direct download URL format from vivimusicupdater - use the full tag (vX.X.X or bX.X.X) or nightly link
         val apkUrl = if (versionName.contains("nightly", ignoreCase = true)) {
-            "https://nightly.link/cosmictaserdev-creator/Convx/workflows/nightly.yml/main/convx-gms-nightly.zip"
+            "https://nightly.link/ogtanmay/Convx/workflows/nightly.yml/main/convx-gms-nightly.zip"
         } else {
-            "https://github.com/cosmictaserdev-creator/Convx/releases/download/$versionName/convx-$versionName.apk"
+            "https://github.com/ogtanmay/Convx/releases/download/$versionName/convx-$versionName.apk"
         }
         val intent = Intent(Intent.ACTION_VIEW, apkUrl.toUri())
 

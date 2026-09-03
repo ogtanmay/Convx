@@ -105,6 +105,13 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.foundation.text.ClickableText
 import androidx.compose.ui.text.style.TextDecoration
 
+private const val UPDATE_REPO = "ogtanmay/Convx"
+private const val UPDATE_API_BASE = "https://api.github.com/repos/$UPDATE_REPO"
+private const val UPDATE_RELEASES_BASE = "https://github.com/$UPDATE_REPO/releases/download"
+private const val UPDATE_VERSION_JSON_URL = "https://raw.githubusercontent.com/$UPDATE_REPO/main/version.json"
+private const val NIGHTLY_WORKFLOW_FILE = "nightly.yml"
+private const val NIGHTLY_DOWNLOAD_URL = "https://nightly.link/$UPDATE_REPO/workflows/$NIGHTLY_WORKFLOW_FILE/main/convx-gms-nightly.zip"
+
 data class ChangelogSection(val title: String, val items: List<String>)
 
 sealed class ViviUpdateStatus {
@@ -332,7 +339,7 @@ fun UpdateScreen(navController: NavHostController) {
                                                 ContextCompat.startActivity(context, installIntent, null)
                                             }
                                         } else {
-                                            val urlToDownload = currentStatus.apkUrl ?: "https://github.com/cosmictaserdev-creator/Convx/releases/download/${currentStatus.version}/convx-${currentStatus.version}.apk"
+                                            val urlToDownload = currentStatus.apkUrl ?: "$UPDATE_RELEASES_BASE/${currentStatus.version}/convx-${currentStatus.version}.apk"
                                             val downloadRequest = OneTimeWorkRequestBuilder<UpdateDownloadWorker>()
                                                 .setInputData(workDataOf("apk_url" to urlToDownload, "version" to currentStatus.version, "file_size" to currentStatus.size))
                                                 .addTag("update_download")
@@ -652,11 +659,24 @@ fun isNewerVersion(latestVersion: String, currentVersion: String): Boolean {
     return false
 }
 
+private fun fetchStableTagFromVersionJson(): String? = try {
+    val json = URL(UPDATE_VERSION_JSON_URL).openStream().bufferedReader().use { it.readText() }
+    val versionData = JSONObject(json)
+    val tag = versionData.optString("tag").takeIf { it.isNotBlank() }
+        ?: versionData.optString("version").takeIf { it.isNotBlank() }?.let {
+            if (it.startsWith("v") || it.startsWith("b")) it else "v$it"
+        }
+    tag
+} catch (e: Exception) {
+    Timber.tag("UpdateCheck").w("Could not read version.json: ${e.message}")
+    null
+}
+
 // Real download size of the nightly zip, from the workflow run's artifact listing.
 // Returns "" on failure so the UI simply omits the size rather than lying about it.
 private fun fetchNightlyArtifactSize(runId: Long): String = try {
     val artifactsUrl =
-        URL("https://api.github.com/repos/cosmictaserdev-creator/Convx/actions/runs/$runId/artifacts")
+        URL("$UPDATE_API_BASE/actions/runs/$runId/artifacts")
     val artifacts = JSONObject(artifactsUrl.openStream().bufferedReader().use { it.readText() })
         .optJSONArray("artifacts")
     val bytes = (0 until (artifacts?.length() ?: 0))
@@ -677,7 +697,7 @@ suspend fun checkForUpdate(
 ) {
     withContext(Dispatchers.IO) {
         try {
-            val url = URL("https://api.github.com/repos/cosmictaserdev-creator/Convx/releases")
+            val url = URL("$UPDATE_API_BASE/releases")
             val json = url.openStream().bufferedReader().use { it.readText() }
             val releases = JSONArray(json)
             
@@ -689,7 +709,7 @@ suspend fun checkForUpdate(
 
             if (betaEnabled) {
                 try {
-                    val nightlyUrl = URL("https://api.github.com/repos/cosmictaserdev-creator/Convx/actions/workflows/nightly.yml/runs?status=success&per_page=1")
+                    val nightlyUrl = URL("$UPDATE_API_BASE/actions/workflows/$NIGHTLY_WORKFLOW_FILE/runs?status=success&per_page=1")
                     val nightlyJson = nightlyUrl.openStream().bufferedReader().use { it.readText() }
                     val nightlyData = JSONObject(nightlyJson)
                     val runs = nightlyData.optJSONArray("workflow_runs")
@@ -726,7 +746,7 @@ suspend fun checkForUpdate(
                 changelogList.add(ChangelogSection(context.getString(R.string.changelog), listOf(subjectLine)))
                 
                 val formattedReleaseDate = formatGitHubDate(runUpdatedAt)
-                val apkDownloadUrl = "https://nightly.link/cosmictaserdev-creator/Convx/workflows/nightly.yml/main/convx-gms-nightly.zip"
+                val apkDownloadUrl = NIGHTLY_DOWNLOAD_URL
                 val apkSize = fetchNightlyArtifactSize(nightlyRunObject.getLong("id"))
 
                 withContext(Dispatchers.Main) {
@@ -735,6 +755,7 @@ suspend fun checkForUpdate(
                 return@withContext
             }
 
+            val versionJsonTag = fetchStableTagFromVersionJson()
             var bestStableRelease: JSONObject? = null
             var bestOverallRelease: JSONObject? = null
 
@@ -745,7 +766,11 @@ suspend fun checkForUpdate(
                 
                 // Track best stable
                 if (!isBeta) {
-                    if (bestStableRelease == null || isNewerVersion(tagName, bestStableRelease.getString("tag_name"))) {
+                    if (versionJsonTag != null) {
+                        if (tagName.equals(versionJsonTag, ignoreCase = true)) {
+                            bestStableRelease = release
+                        }
+                    } else if (bestStableRelease == null || isNewerVersion(tagName, bestStableRelease.getString("tag_name"))) {
                         bestStableRelease = release
                     }
                 }
@@ -798,7 +823,7 @@ suspend fun checkForUpdate(
                     var imageUrl: String? = null
                     try {
                         val changelogUrl =
-                            URL("https://github.com/cosmictaserdev-creator/Convx/releases/download/$tagWithPrefix/changelog.json")
+                            URL("$UPDATE_RELEASES_BASE/$tagWithPrefix/changelog.json")
                         val changelogJson = changelogUrl.openStream().bufferedReader().use { it.readText() }
                         val changelogData = JSONObject(changelogJson)
 

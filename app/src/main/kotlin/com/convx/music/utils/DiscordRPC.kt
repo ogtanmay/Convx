@@ -62,7 +62,7 @@ class DiscordRPC(
                 button2Text.ifEmpty { "Visit Convx" },
                 song
             )
-            buttonsList.add(resolvedText to "https://github.com/cosmictaserdev-creator/Convx")
+            buttonsList.add(resolvedText to "https://github.com/ogtanmay/Convx")
         }
 
         val type = when (activityType) {

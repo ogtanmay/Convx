@@ -17,11 +17,6 @@ import java.time.ZoneOffset
 import com.music.innertube.models.IpVersion
 
 val IsFirstRunKey = booleanPreferencesKey("isFirstRun")
-/** Set once, the first time the app ever runs — gates the donation prompt on "used for
- *  a while" rather than showing it to a brand new install. */
-val FirstLaunchTimestampKey = longPreferencesKey("firstLaunchTimestamp")
-val DonationPromptLastShownKey = longPreferencesKey("donationPromptLastShown")
-val DonationPromptDismissedKey = booleanPreferencesKey("donationPromptDismissed")
 val AppIconKey = stringPreferencesKey("appIcon")
 
 /** JSON map of player-control slot -> user-supplied glyph. See ui/player/customize/PlayerIcons.kt. */
@@ -1026,4 +1021,3 @@ val SuggestionRegionSlugToName =
         "ae" to "United Arab Emirates",
         "il" to "Israel"
     )
-
