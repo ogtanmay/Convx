@@ -541,7 +541,7 @@ fun WelcomePagerScreen(onFinished: () -> Unit) {
                                 )
                             },
                             onClick = {
-                                uriHandler.safeOpenUri(context, "https://github.com/cosmictaserdev-creator/Convx")
+                                uriHandler.safeOpenUri(context, "https://github.com/ogtanmay/Convx")
                             }
                         )
 
