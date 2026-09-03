@@ -6,6 +6,36 @@ never a second server with a different opinion about the same room.
 
 ## Deploy
 
+### Wispbyte / any Node host
+
+The repository includes a Node runtime for hosts such as Wispbyte:
+
+```bash
+npm install
+npm start
+```
+
+Set `PORT` when the host provides one. Set `API_KEY` to protect both the HTTP
+API and WebSocket upgrade, and set `PUBLIC_URL` if you want the startup log to
+print the public hostname instead of localhost. On boot the process prints the
+HTTP API URL, WebSocket URL, and Blends API URL.
+
+The Node runtime is intentionally protocol-compatible with the Android client:
+rooms use `POST /api/rooms` followed by `GET /room/<CODE>` with a WebSocket
+upgrade. It also provides:
+
+- `POST /api/blends` with `{ "username": "..." }`
+- `POST /api/blends/<CODE>/join` with `{ "username": "..." }`
+- `POST /api/blends/<CODE>/tracks` with `{ "username": "...", "track": { ... } }`
+- `GET /api/blends/<CODE>`
+
+Blends deduplicate submitted songs and rank them by the number of participants
+who submitted each song. Track `id` values should be YouTube video IDs because
+the Android client plays the returned playlist through YouTube Music.
+
+The Node runtime stores rooms and blends in memory. Use the Durable Object
+runtime below when you need hibernation and durable storage.
+
 ```bash
 npm install
 npx wrangler login      # browser auth, no card asked

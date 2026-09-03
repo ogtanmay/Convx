@@ -22,6 +22,7 @@ import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.getSystemService
 import androidx.datastore.preferences.core.edit
 import com.convx.music.R
+import com.convx.music.config.RemoteVersionConfigProvider
 import com.convx.music.constants.ListenTogetherAutoAddSuggestionsKey
 import com.convx.music.constants.ListenTogetherAutoApprovalKey
 import com.convx.music.constants.ListenTogetherIsHostKey
@@ -464,11 +465,23 @@ class ListenTogetherClient @Inject constructor(
         // Any well-formed ws/wss URL is honoured, not just the built-in list.
         // Gating on findByUrl silently discarded every self-hosted server the
         // settings screen let you type in, and fell back to the default.
-        return if (savedUrl.startsWith("ws://") || savedUrl.startsWith("wss://")) {
-            savedUrl.trimEnd('/')
+        val releaseUrl = RemoteVersionConfigProvider.cached()?.listenTogetherWsUrl
+            ?.trim()
+            ?.takeIf { it.startsWith("ws://") || it.startsWith("wss://") }
+        val candidate = if (savedUrl == DEFAULT_SERVER_URL && releaseUrl != null) releaseUrl else savedUrl
+        return if (candidate.startsWith("ws://") || candidate.startsWith("wss://")) {
+            candidate.trimEnd('/')
         } else {
             DEFAULT_SERVER_URL
         }
+    }
+
+    private fun Request.Builder.withReleaseApiKey(): Request.Builder {
+        RemoteVersionConfigProvider.apiKey()?.let { key ->
+            addHeader("X-API-Key", key)
+            addHeader("Authorization", "Bearer $key")
+        }
+        return this
     }
 
     /** `wss://host` -> `https://host`, for the room-allocation REST call. */
@@ -545,6 +558,7 @@ class ListenTogetherClient @Inject constructor(
 
         val request = Request.Builder()
             .url(serverUrl)
+            .withReleaseApiKey()
             .build()
 
         webSocket = client.newWebSocket(request, object : WebSocketListener() {
@@ -1396,6 +1410,7 @@ class ListenTogetherClient @Inject constructor(
         val request = Request.Builder()
             .url("${httpBase()}/api/rooms")
             .post(ByteArray(0).toRequestBody(null, 0, 0))
+            .withReleaseApiKey()
             .build()
         client.newCall(request).execute().use { response ->
             val body = response.body?.string()

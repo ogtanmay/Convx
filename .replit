@@ -1,7 +1,35 @@
-modules = ["nodejs-20", "python-3.12"]
+modules = ["nodejs-20", "python-3.12", "java-graalvm22.3"]
 
 [nix]
 channel = "stable-25_05"
 
 [agent]
 expertMode = true
+
+[[ports]]
+localPort = 3000
+externalPort = 80
+
+[workflows]
+runButton = "Project"
+
+[[workflows.workflow]]
+name = "Project"
+mode = "parallel"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "Convx Sync + Blends API"
+
+[[workflows.workflow]]
+name = "Convx Sync + Blends API"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "cd listen-together-server && npm start"
+waitForPort = 3000
+
+[workflows.workflow.metadata]
+outputType = "console"

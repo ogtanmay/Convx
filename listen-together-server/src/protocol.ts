@@ -52,6 +52,7 @@ export const S2C = {
   RECONNECTED: 'reconnected',
   USER_RECONNECTED: 'user_reconnected',
   USER_DISCONNECTED: 'user_disconnected',
+  CHAT: 'chat',
   SUGGESTION_RECEIVED: 'suggestion_received',
   SUGGESTION_APPROVED: 'suggestion_approved',
   SUGGESTION_REJECTED: 'suggestion_rejected',

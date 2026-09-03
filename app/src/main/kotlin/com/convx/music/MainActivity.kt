@@ -1141,7 +1141,7 @@ class MainActivity : ComponentActivity() {
                         // one back-tap to root (where the bar reappears) or the back
                         // arrow's long-press (backToMain()) shortcut.
                         currentRoute?.startsWith("settings/") == true -> false
-                        currentRoute in setOf("login", "channel_picker", "equalizer", "wrapped", "update", "listen_together/chat") -> false
+                                currentRoute in setOf("login", "channel_picker", "equalizer", "wrapped", "update", "listen_together/chat", "listen_together/blends") -> false
                         else -> true
                     }
                 }
@@ -1902,7 +1902,7 @@ class MainActivity : ComponentActivity() {
 
                                 }
                             } else {
-                                if (currentRoute != "wrapped" && currentRoute != "update" && currentRoute != "listen_together/chat" && currentRoute != "ambient_mode") {
+                            if (currentRoute != "wrapped" && currentRoute != "update" && currentRoute != "listen_together/chat" && currentRoute != "listen_together/blends" && currentRoute != "ambient_mode") {
                                     BottomSheetPlayer(
                                         state = playerBottomSheetState,
                                         navController = navController,

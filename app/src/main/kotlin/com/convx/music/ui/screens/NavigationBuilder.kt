@@ -137,6 +137,10 @@ fun NavGraphBuilder.navigationBuilder(
         CommentTogetherScreen(navController)
     }
 
+    sharedComposable("listen_together/blends") {
+        BlendsScreen(navController)
+    }
+
     sharedComposable("history") {
         HistoryScreen(navController)
     }

@@ -24,6 +24,13 @@ object RemoteVersionConfigProvider {
 
     fun cached(): RemoteVersionConfig? = cached
 
+    /**
+     * Returns the configured API key without ever logging it. The key is
+     * intentionally supplied by the published version.json so the app binary
+     * does not need to be rebuilt when the API host changes.
+     */
+    fun apiKey(): String? = cached?.apiKey?.trim()?.takeIf { it.isNotEmpty() }
+
     suspend fun refresh(): RemoteVersionConfig? = withContext(Dispatchers.IO) {
         runCatching {
             val jsonText = URL(VERSION_JSON_URL).openStream().bufferedReader().use { it.readText() }

@@ -32,6 +32,7 @@ import com.music.innertube.models.YouTubeLocale
 import com.music.kugou.KuGou
 import com.music.lastfm.LastFM
 import com.convx.music.constants.*
+import com.convx.music.config.RemoteVersionConfigProvider
 import com.convx.music.di.ApplicationScope
 import com.convx.music.extensions.toEnum
 import com.convx.music.extensions.toInetSocketAddress
@@ -68,6 +69,13 @@ class App : Application(), SingletonImageLoader.Factory {
 
     override fun onCreate() {
         super.onCreate()
+
+        // The service endpoints are controlled by the release metadata. Warm
+        // this cache early; all consumers still have local/default fallbacks
+        // when the device is offline or version.json is unavailable.
+        applicationScope.launch(Dispatchers.IO) {
+            RemoteVersionConfigProvider.refresh()
+        }
 
         // Restored synchronously, before anything else can start: the async
         // DataStore collector further down (applicationScope.launch { ... }

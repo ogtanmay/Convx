@@ -471,6 +471,28 @@
     <string name="listen_together_smart_resync_desc">Automatically catch up with the host after a connection drop</string>
     <string name="listen_together_host_controls">The host controls playback in this session</string>
     <string name="listen_together_locked">Host controls playback</string>
+    <string name="blends">Blends</string>
+    <string name="blends_description">Build a shared playlist from everyone’s music taste</string>
+    <string name="blends_create">Create a Blend</string>
+    <string name="blends_join">Join a Blend</string>
+    <string name="blends_your_name">Your name</string>
+    <string name="blends_code">Blend code</string>
+    <string name="blends_enter_code">Enter a Blend code</string>
+    <string name="blends_create_hint">Start a shared playlist and invite friends with the code</string>
+    <string name="blends_join_hint">Enter a code shared by a friend</string>
+    <string name="blends_empty">Add songs you love. The Blend will rank music that fits everyone.</string>
+    <string name="blends_add_current">Add current song</string>
+    <string name="blends_no_song">Play a song first to add it to this Blend</string>
+    <string name="blends_refresh">Refresh Blend</string>
+    <string name="blends_play">Play Blend</string>
+    <string name="blends_leave">Leave Blend</string>
+    <string name="blends_members">Members</string>
+    <string name="blends_tracks">Shared playlist</string>
+    <string name="blends_copy_code">Tap the code to copy it</string>
+    <string name="blends_loading">Updating Blend…</string>
+    <string name="blends_share">Invite friends</string>
+    <string name="blends_score">Taste match</string>
+    <string name="blends_added_by">Added by %1$s</string>
 
     <!-- JioSaavn Streaming -->
     <string name="enable_saavn_streaming">Enable JioSaavn Streaming</string>
